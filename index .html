@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COSMOGRAPH — Thermodynamic Atlas of Everything</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;600&family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --void: #00000a;
+    --deep: #03040f;
+    --plasma: #0ff;
+    --entropy: #ff6b35;
+    --bose: #7b2fff;
+    --fermi: #00ff88;
+    --radiation: #fff5aa;
+    --hot: #ff2d78;
+    --cold: #1a3aff;
+    --filament: rgba(0,255,255,0.15);
+    --dim: rgba(255,255,255,0.05);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--void);
+    color: #c8d8e8;
+    font-family: 'Rajdhani', sans-serif;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* === HEADER === */
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    padding: 18px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(180deg, rgba(0,0,10,0.95) 0%, transparent 100%);
+    border-bottom: 1px solid rgba(0,255,255,0.08);
+  }
+
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.4rem;
+    font-weight: 900;
+    letter-spacing: 0.35em;
+    color: var(--plasma);
+    text-shadow: 0 0 30px rgba(0,255,255,0.5), 0 0 60px rgba(0,255,255,0.2);
+  }
+  .logo span { color: var(--radiation); font-size:0.65em; display:block; letter-spacing:0.5em; font-weight:400; margin-top:2px; }
+
+  nav {
+    display: flex;
+    gap: 30px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.2em;
+    color: rgba(200,216,232,0.5);
+  }
+  nav a {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.3s;
+    padding: 4px 0;
+    border-bottom: 1px solid transparent;
+  }
+  nav a:hover, nav a.active { color: var(--plasma); border-color: var(--plasma); }
+
+  .entropy-readout {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--fermi);
+    text-align: right;
+    letter-spacing: 0.1em;
+  }
+  .entropy-readout .val { color: var(--radiation); font-size:1.1em; }
+
+  /* === MAIN CANVAS SECTION === */
+  .cosmos-container {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+
+  canvas#cosmos {
+    position: absolute;
+    top:0; left:0;
+    width:100%; height:100%;
+  }
+
+  /* === OVERLAY UI === */
+  .hud {
+    position: absolute;
+    bottom: 40px; left: 40px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    color: rgba(200,216,232,0.4);
+    pointer-events: none;
+  }
+  .hud-row { margin: 4px 0; display:flex; gap: 14px; align-items:center; }
+  .hud-label { color: rgba(200,216,232,0.25); }
+  .hud-val { color: var(--plasma); }
+
+  .probe-panel {
+    position: absolute;
+    top: 90px; right: 30px;
+    width: 260px;
+    background: rgba(3,4,15,0.88);
+    border: 1px solid rgba(0,255,255,0.12);
+    border-radius: 2px;
+    padding: 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 0 40px rgba(0,255,255,0.04), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+
+  .probe-panel h3 {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.4em;
+    color: var(--plasma);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(0,255,255,0.1);
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin: 7px 0;
+    color: rgba(200,216,232,0.5);
+  }
+  .stat-row .stat-val { color: var(--radiation); }
+  .stat-row .stat-val.hot { color: var(--hot); }
+  .stat-row .stat-val.cold { color: var(--cold); }
+  .stat-row .stat-val.bose { color: var(--bose); }
+  .stat-row .stat-val.fermi { color: var(--fermi); }
+
+  .entropy-bar {
+    margin-top: 14px;
+    height: 2px;
+    background: rgba(255,255,255,0.05);
+    position: relative;
+    overflow: hidden;
+    border-radius:1px;
+  }
+  .entropy-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--cold), var(--plasma), var(--hot));
+    transition: width 0.3s ease;
+  }
+  .entropy-bar-label {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    color: rgba(200,216,232,0.3);
+    font-size: 0.58rem;
+  }
+
+  /* === CONTROLS === */
+  .controls {
+    position: absolute;
+    bottom: 40px; right: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: all;
+  }
+  .ctrl-btn {
+    width: 36px; height: 36px;
+    background: rgba(0,255,255,0.04);
+    border: 1px solid rgba(0,255,255,0.15);
+    color: var(--plasma);
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex; align-items:center; justify-content:center;
+    transition: all 0.2s;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing:0;
+  }
+  .ctrl-btn:hover {
+    background: rgba(0,255,255,0.1);
+    box-shadow: 0 0 16px rgba(0,255,255,0.2);
+  }
+
+  /* === LEGEND STRIP === */
+  .legend-strip {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    color: rgba(200,216,232,0.35);
+    pointer-events: none;
+  }
+  .legend-dot {
+    width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:6px;
+  }
+
+  /* === SECTION BELOW === */
+  .theory-section {
+    padding: 100px 80px 80px;
+    background: var(--deep);
+    position: relative;
+    overflow: hidden;
+  }
+  .theory-section::before {
+    content:'';
+    position:absolute;
+    top:0; left:0; right:0; height:1px;
+    background: linear-gradient(90deg, transparent, rgba(0,255,255,0.3), transparent);
+  }
+
+  .theory-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+    margin-top: 60px;
+  }
+
+  .theory-card {
+    background: rgba(0,0,10,0.6);
+    border: 1px solid rgba(0,255,255,0.06);
+    padding: 36px 32px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.4s;
+  }
+  .theory-card:hover { border-color: rgba(0,255,255,0.2); }
+  .theory-card::before {
+    content:'';
+    position:absolute;
+    top:0; left:0; width:3px; height:100%;
+    background: var(--accent-c, var(--plasma));
+    opacity:0.5;
+  }
+
+  .theory-card h4 {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.4em;
+    color: var(--accent-c, var(--plasma));
+    margin-bottom: 14px;
+  }
+
+  .theory-eq {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.1rem;
+    color: var(--radiation);
+    margin: 16px 0;
+    letter-spacing: 0.05em;
+  }
+
+  .theory-card p {
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: rgba(200,216,232,0.5);
+    font-weight: 300;
+  }
+
+  .section-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.5em;
+    color: rgba(200,216,232,0.3);
+    margin-bottom: 12px;
+  }
+  .section-heading {
+    font-family: 'Orbitron', monospace;
+    font-size: 2.2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: white;
+    letter-spacing: 0.05em;
+  }
+  .section-heading span { color: var(--plasma); }
+
+  /* === PHASE DIAGRAM === */
+  .phase-section {
+    padding: 80px;
+    background: var(--void);
+    position: relative;
+  }
+
+  .phase-canvas-wrap {
+    margin-top: 50px;
+    position: relative;
+    border: 1px solid rgba(0,255,255,0.06);
+    background: rgba(0,0,10,0.8);
+  }
+
+  canvas#phase { display:block; }
+
+  /* === FOOTER === */
+  footer {
+    padding: 40px 80px;
+    border-top: 1px solid rgba(0,255,255,0.06);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: rgba(200,216,232,0.2);
+  }
+  footer .logo-sm {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.65rem;
+    color: rgba(0,255,255,0.4);
+    letter-spacing: 0.3em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">COSMOGRAPH<span>THERMODYNAMIC ATLAS · v1.0</span></div>
+  <nav>
+    <a class="active">COSMOS MAP</a>
+    <a>PHASE SPACE</a>
+    <a>FIELD EQS</a>
+    <a>ENTROPY LOG</a>
+  </nav>
+  <div class="entropy-readout">
+    S<sub>univ</sub> &nbsp;<span class="val" id="entropyVal">10⁸⁸</span> k<sub>B</sub>
+    <br>T<sub>cmb</sub> = 2.725 K &nbsp;|&nbsp; <span style="color:var(--fermi)" id="tickVal">——</span>
+  </div>
+</header>
+
+<!-- MAIN CANVAS -->
+<div class="cosmos-container" id="cosmosWrap">
+  <canvas id="cosmos"></canvas>
+
+  <div class="hud" id="hud">
+    <div class="hud-row"><span class="hud-label">SCALE</span><span class="hud-val" id="scaleVal">1 px = 12.4 Mpc</span></div>
+    <div class="hud-row"><span class="hud-label">NODES</span><span class="hud-val" id="nodeVal">—</span></div>
+    <div class="hud-row"><span class="hud-label">COORD</span><span class="hud-val" id="coordVal">α:— δ:—</span></div>
+    <div class="hud-row"><span class="hud-label">Σρ</span><span class="hud-val" id="densVal">—</span></div>
+  </div>
+
+  <div class="probe-panel">
+    <h3>PROBE · MICROSTATE INSPECTOR</h3>
+    <div class="stat-row"><span>Phase State</span><span class="stat-val bose" id="phase">BOSE CONDENSATE</span></div>
+    <div class="stat-row"><span>Temperature</span><span class="stat-val hot" id="temp">—</span></div>
+    <div class="stat-row"><span>Entropy S/k</span><span class="stat-val" id="entropy">—</span></div>
+    <div class="stat-row"><span>Free Energy F</span><span class="stat-val" id="free">—</span></div>
+    <div class="stat-row"><span>Ω(microstate)</span><span class="stat-val fermi" id="omega">—</span></div>
+    <div class="stat-row"><span>Curvature κ</span><span class="stat-val" id="curv">—</span></div>
+    <div class="stat-row"><span>Partition Z</span><span class="stat-val cold" id="partition">—</span></div>
+    <div style="margin-top:16px; color:rgba(200,216,232,0.25); font-size:0.58rem;">CURSOR ENTROPY GRADIENT</div>
+    <div class="entropy-bar"><div class="entropy-bar-fill" id="entropyBarFill" style="width:40%"></div></div>
+    <div class="entropy-bar-label"><span>S→0 (COLD)</span><span>(HOT) S→MAX</span></div>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="btnZoomIn" title="Zoom In">+</button>
+    <button class="ctrl-btn" id="btnZoomOut" title="Zoom Out">−</button>
+    <button class="ctrl-btn" id="btnReset" title="Reset" style="font-size:0.65rem">RST</button>
+    <button class="ctrl-btn" id="btnPause" title="Pause" style="font-size:0.65rem">⏸</button>
+  </div>
+
+  <div class="legend-strip">
+    <span><span class="legend-dot" style="background:#2d5fff"></span>VOIDS</span>
+    <span><span class="legend-dot" style="background:#00ffcc"></span>FILAMENTS</span>
+    <span><span class="legend-dot" style="background:#fff5aa"></span>GALACTIC NODES</span>
+    <span><span class="legend-dot" style="background:#ff6b35"></span>CLUSTER CORES</span>
+    <span><span class="legend-dot" style="background:#ff2d78"></span>SINGULARITIES</span>
+  </div>
+</div>
+
+
+<!-- THEORY SECTION -->
+<section class="theory-section">
+  <div class="section-title">THEORETICAL FRAMEWORK</div>
+  <div class="section-heading">Statistical Mechanics<br>of <span>Large-Scale Structure</span></div>
+  <div style="max-width:600px; margin-top:20px; color:rgba(200,216,232,0.45); font-size:0.95rem; line-height:1.8;">
+    The universe is treated as a grand canonical ensemble. Each cosmic web node is a microstate; filaments are geodesics on a Riemannian 3-manifold. Entropy gradients drive structure formation.
+  </div>
+
+  <div class="theory-grid">
+    <div class="theory-card" style="--accent-c: var(--plasma)">
+      <h4>BOLTZMANN ENTROPY</h4>
+      <div class="theory-eq">S = k<sub>B</sub> ln Ω</div>
+      <p>Each cosmic void maximizes entropy — the most probable macrostate. Galactic filaments represent spontaneous symmetry-breaking along geodesic paths, analogous to phase boundaries in condensed matter systems.</p>
+    </div>
+    <div class="theory-card" style="--accent-c: var(--entropy)">
+      <h4>GRAND PARTITION FUNCTION</h4>
+      <div class="theory-eq">Z = Σ e<sup>−βH</sup></div>
+      <p>The cosmic partition function sums over all possible large-scale configurations weighted by Boltzmann factors. Dark energy acts as a chemical potential μ shifting the ensemble toward accelerated expansion.</p>
+    </div>
+    <div class="theory-card" style="--accent-c: var(--bose)">
+      <h4>RIEMANN CURVATURE</h4>
+      <div class="theory-eq">G<sub>μν</sub> = 8πG T<sub>μν</sub></div>
+      <p>Geometry is not a background — it is the statistical state. Mass-energy curves spacetime exactly as density fluctuations curve the probability density in phase space. Geodesics are trajectories of maximum likelihood.</p>
+    </div>
+    <div class="theory-card" style="--accent-c: var(--fermi)">
+      <h4>FREE ENERGY LANDSCAPE</h4>
+      <div class="theory-eq">F = U − TS</div>
+      <p>Cosmic structures minimize free energy, not just potential energy. At low temperature (early universe), ordered structures nucleate. As entropy increases, voids grow — the ultimate heat death as F → 0.</p>
+    </div>
+    <div class="theory-card" style="--accent-c: var(--hot)">
+      <h4>FLUCTUATION THEOREM</h4>
+      <div class="theory-eq">P(+ΔS)/P(−ΔS) = e<sup>ΔS/k</sup></div>
+      <p>Even in an expanding universe, local entropy can spontaneously decrease — explaining galaxy formation. The Crooks fluctuation theorem governs the statistical likelihood of structure emergence from the cosmic plasma.</p>
+    </div>
+    <div class="theory-card" style="--accent-c: var(--cold)">
+      <h4>TOPOLOGICAL DEFECTS</h4>
+      <div class="theory-eq">π<sub>n</sub>(M) ≠ 0</div>
+      <p>Non-trivial homotopy groups of the vacuum manifold M predict cosmic defects — strings, monopoles, domain walls. These are geometric analogs of dislocations in crystal lattices, described by the same Kibble-Zurek mechanism.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PHASE DIAGRAM -->
+<section class="phase-section">
+  <div class="section-title">COSMIC PHASE SPACE</div>
+  <div class="section-heading">Equation of State <span>Map</span></div>
+  <div class="phase-canvas-wrap">
+    <canvas id="phase" width="1200" height="420"></canvas>
+  </div>
+</section>
+
+<footer>
+  <div class="logo-sm">COSMOGRAPH</div>
+  <div>GEOMETRY ENGINE · RIEMANNIAN MANIFOLD PROJECTION · GRAND CANONICAL ENSEMBLE</div>
+  <div>S<sub>max</sub> = A/4ℓ<sub>P</sub>² · BEKENSTEIN-HAWKING BOUND</div>
+</footer>
+
+<script>
+// ======================================================
+// COSMOGRAPH ENGINE
+// Thermodynamic Universe Mapper
+// ======================================================
+
+const canvas = document.getElementById('cosmos');
+const ctx = canvas.getContext('2d');
+let W, H;
+let mouseX = 0, mouseY = 0;
+let zoom = 1, panX = 0, panY = 0;
+let isPaused = false;
+let t = 0;
+let nodes = [];
+let filaments = [];
+let voids = [];
+let darkMatter = []; // Invisible mass — felt but not seen (until now)
+
+function resize() {
+  W = canvas.width = canvas.offsetWidth;
+  H = canvas.height = canvas.offsetHeight;
+}
+resize();
+window.addEventListener('resize', () => { resize(); generateCosmos(); setTimeout(drawPhase, 100); });
+
+// =====================
+// PROCEDURAL GENERATION
+// Statistical Mechanical Field Equations
+// =====================
+
+function boltzmann(energy, T) {
+  return Math.exp(-energy / (T + 0.0001));
+}
+
+function riemannianMetric(x1, y1, x2, y2, curvature) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const r2 = dx*dx + dy*dy;
+  // Simplified: Schwarzschild-inspired metric perturbation
+  return Math.sqrt(r2) * (1 + curvature * 0.0001 / (r2 + 1));
+}
+
+function entropy(microstate_count) {
+  return Math.log(Math.max(1, microstate_count));
+}
+
+// Voronoi-inspired cosmic web using Delaunay relaxation + Boltzmann weights
+function generateCosmos() {
+  nodes = [];
+  filaments = [];
+  voids = [];
+
+  const N = Math.floor(W * H / 4500) + 80; // ~2× denser — affordable now with O(N·K) grid
+  const T_universe = 2.5 + Math.random() * 0.5; // Thermal analog temperature
+
+  // Seed nodes with Boltzmann-distributed masses (power-law like CMB)
+  for (let i = 0; i < N; i++) {
+    // Use rejection sampling for clustering (like cosmic density field)
+    let x, y, accepted = false;
+    let attempts = 0;
+    while (!accepted && attempts < 20) {
+      x = Math.random() * W;
+      y = Math.random() * H;
+      // Gaussian random field clustering
+      let density = 0;
+      for (let j = 0; j < 6; j++) {
+        const cx = Math.random() * W, cy = Math.random() * H;
+        const r2 = (x-cx)**2 + (y-cy)**2;
+        density += Math.exp(-r2 / (W * H * 0.002));
+      }
+      accepted = Math.random() < boltzmann(-density * 3, T_universe) || attempts > 10;
+      attempts++;
+    }
+
+    const mass = Math.pow(Math.random(), -1.8) * 0.3; // Power-law IMF analog
+    const temp = 1e4 * Math.pow(mass, 0.7) * (0.5 + Math.random());
+    const S = entropy(Math.floor(mass * 200));
+
+    nodes.push({
+      x, y,
+      mass,
+      temp,
+      entropy: S,
+      free_energy: mass - T_universe * S,
+      omega: Math.floor(Math.exp(Math.min(S, 15))),
+      curvature: mass * 0.4 + (Math.random() - 0.5) * 0.2,
+      partition: (1 / (1 - Math.exp(-1/Math.max(temp, 0.1)))).toFixed(3),
+      phase: mass > 8 ? 'SINGULARITY' : mass > 4 ? 'CLUSTER CORE' : mass > 1.5 ? 'GALACTIC NODE' : mass > 0.4 ? 'FILAMENT' : 'VOID',
+      radius: Math.min(12, Math.max(1.5, Math.pow(mass, 0.4) * 3)),
+      vx: (Math.random() - 0.5) * 0.08,
+      vy: (Math.random() - 0.5) * 0.08,
+      baseX: 0, baseY: 0,
+    });
+  }
+
+  nodes.forEach(n => { n.baseX = n.x; n.baseY = n.y; });
+
+  // ---- DARK MATTER MIST ----
+  // ~5× more particles than baryonic nodes, ultra-low mass, gravitationally coupled
+  darkMatter = [];
+  const DM_COUNT = Math.floor(N * 5);
+  for (let i = 0; i < DM_COUNT; i++) {
+    // Seed near filament paths using existing nodes as attractors
+    const anchor = nodes[Math.floor(Math.random() * nodes.length)];
+    const spread = 120 + Math.random() * 200;
+    darkMatter.push({
+      x: anchor.x + (Math.random() - 0.5) * spread,
+      y: anchor.y + (Math.random() - 0.5) * spread,
+      vx: (Math.random() - 0.5) * 0.12,
+      vy: (Math.random() - 0.5) * 0.12,
+      mass: 0.05 + Math.random() * 0.15, // sub-baryonic — dark but heavy in aggregate
+      alpha: 0.04 + Math.random() * 0.08,
+      cx: 0, cy: 0,
+    });
+  }
+
+  // Build filaments: connect nearby nodes using geodesic (Riemannian metric)
+  for (let i = 0; i < nodes.length; i++) {
+    const ni = nodes[i];
+    const candidates = [];
+    for (let j = i+1; j < nodes.length; j++) {
+      const nj = nodes[j];
+      const d = riemannianMetric(ni.x, ni.y, nj.x, nj.y, (ni.curvature + nj.curvature) * 0.5);
+      if (d < W * 0.15) candidates.push({ j, d });
+    }
+    candidates.sort((a,b) => a.d - b.d);
+    const maxLinks = ni.mass > 4 ? 5 : ni.mass > 1 ? 3 : 2;
+    candidates.slice(0, maxLinks).forEach(c => {
+      filaments.push({
+        a: i, b: c.j,
+        strength: boltzmann(c.d / 100, nodes[i].temp * 0.01 + 1),
+        d: c.d
+      });
+    });
+  }
+}
+
+// =====================
+// RENDERING
+// =====================
+
+function hslToRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h/30) % 12;
+  const a = s * Math.min(l, 1-l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
+  return [Math.round(f(0)*255), Math.round(f(8)*255), Math.round(f(4)*255)];
+}
+
+function nodeColor(node) {
+  if (node.phase === 'SINGULARITY') return `rgba(255,45,120,`;
+  if (node.phase === 'CLUSTER CORE') return `rgba(255,107,53,`;
+  if (node.phase === 'GALACTIC NODE') return `rgba(255,245,170,`;
+  if (node.phase === 'FILAMENT') return `rgba(0,255,200,`;
+  return `rgba(40,80,255,`;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // ---- BACKGROUND: Microwave Background analog ----
+  const bgGrad = ctx.createRadialGradient(W*0.5, H*0.5, 0, W*0.5, H*0.5, Math.max(W,H)*0.8);
+  bgGrad.addColorStop(0, 'rgba(4,6,25,1)');
+  bgGrad.addColorStop(0.5, 'rgba(2,3,15,1)');
+  bgGrad.addColorStop(1, 'rgba(0,0,8,1)');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Background noise (thermal fluctuations)
+  for (let i = 0; i < 300; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * H;
+    const a = Math.random() * 0.15;
+    const r = Math.random() * 1.2;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(255,255,255,${a})`;
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.translate(panX, panY);
+  ctx.scale(zoom, zoom);
+
+  // ---- DARK MATTER MIST: sub-luminous halos tracing the cosmic web ----
+  // Rendered as a single batched pass — no per-particle state change overhead
+  darkMatter.forEach(dm => {
+    ctx.beginPath();
+    ctx.arc(dm.x, dm.y, 1.2, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(123,80,255,${dm.alpha})`;
+    ctx.fill();
+  });
+
+  // ---- VOIDS: Minkowski functional empty regions ----
+  nodes.filter(n => n.phase === 'VOID').forEach(v => {
+    const g = ctx.createRadialGradient(v.x, v.y, 0, v.x, v.y, 80 + v.mass * 20);
+    g.addColorStop(0, 'rgba(20,40,120,0.04)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(v.x, v.y, 80 + v.mass * 20, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // ---- FILAMENTS: Geodesics on Riemannian manifold ----
+  filaments.forEach(f => {
+    const na = nodes[f.a], nb = nodes[f.b];
+    if (!na || !nb) return;
+    const alpha = Math.min(0.35, f.strength * 0.6);
+    if (alpha < 0.01) return;
+
+    ctx.beginPath();
+    // Bezier curve = geodesic approximation
+    const mx = (na.x + nb.x) / 2 + (Math.sin(t * 0.001 + f.a) * 5);
+    const my = (na.y + nb.y) / 2 + (Math.cos(t * 0.001 + f.b) * 5);
+    ctx.moveTo(na.x, na.y);
+    ctx.quadraticCurveTo(mx, my, nb.x, nb.y);
+
+    const avgMass = (na.mass + nb.mass) * 0.5;
+    const c = avgMass > 3 ? `rgba(255,150,80,${alpha*0.6})` :
+              avgMass > 1 ? `rgba(0,255,200,${alpha*0.5})` :
+              `rgba(80,140,255,${alpha*0.35})`;
+    ctx.strokeStyle = c;
+    ctx.lineWidth = Math.min(0.8, f.strength * 1.2);
+    ctx.stroke();
+  });
+
+  // ---- NODES: Cosmic structures ----
+  nodes.forEach((n, i) => {
+    const base = nodeColor(n);
+    const r = n.radius * zoom < 0.5 ? 0.8 : n.radius;
+    const pulse = 1 + 0.08 * Math.sin(t * 0.02 + i * 0.7);
+
+    // Glow halo
+    if (n.mass > 0.8) {
+      const glowR = r * 6 * pulse;
+      const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, glowR);
+      g.addColorStop(0, base + '0.2)');
+      g.addColorStop(0.4, base + '0.06)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, glowR, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // Core
+    const coreG = ctx.createRadialGradient(n.x - r*0.3, n.y - r*0.3, 0, n.x, n.y, r * pulse);
+    coreG.addColorStop(0, base + '1)');
+    coreG.addColorStop(0.6, base + '0.7)');
+    coreG.addColorStop(1, base + '0.1)');
+    ctx.fillStyle = coreG;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r * pulse, 0, Math.PI*2);
+    ctx.fill();
+
+    // Singularity accretion ring
+    if (n.phase === 'SINGULARITY') {
+      ctx.beginPath();
+      ctx.ellipse(n.x, n.y, r*3.5, r*1.2, t*0.005 + i, 0, Math.PI*2);
+      ctx.strokeStyle = `rgba(255,45,120,0.3)`;
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+  });
+
+  ctx.restore();
+
+  // ---- UPDATE PROBE: throttled to every 3 frames (humans can't read 60fps text) ----
+  if (t % 3 === 0) updateProbe();
+}
+
+function updateProbe() {
+  const wx = (mouseX - panX) / zoom;
+  const wy = (mouseY - panY) / zoom;
+
+  let closest = null, minD = Infinity;
+  nodes.forEach(n => {
+    const d = Math.hypot(n.x - wx, n.y - wy);
+    if (d < minD) { minD = d; closest = n; }
+  });
+
+  if (closest) {
+    const entropyPct = Math.min(100, (closest.entropy / 12) * 100);
+    document.getElementById('phase').textContent = closest.phase;
+    document.getElementById('phase').className = 'stat-val ' +
+      (closest.phase==='SINGULARITY'?'hot': closest.phase==='CLUSTER CORE'?'hot':
+       closest.phase==='GALACTIC NODE'?'':'closest.phase==="FILAMENT"?"fermi":"cold"');
+    document.getElementById('temp').textContent = (closest.temp > 1e6 ? (closest.temp/1e6).toFixed(1)+'M' : closest.temp.toFixed(0)) + ' K';
+    document.getElementById('entropy').textContent = closest.entropy.toFixed(3) + ' nat';
+    document.getElementById('free').textContent = closest.free_energy.toFixed(3) + ' ε';
+    document.getElementById('omega').textContent = closest.omega > 1e9 ? '>10⁹' : closest.omega.toLocaleString();
+    document.getElementById('curv').textContent = closest.curvature.toFixed(4) + ' κ';
+    document.getElementById('partition').textContent = closest.partition;
+    document.getElementById('entropyBarFill').style.width = entropyPct + '%';
+    document.getElementById('densVal').textContent = (closest.mass * 2.3).toFixed(2) + ' ρ̄';
+    document.getElementById('coordVal').textContent = `α:${(wx/W*360).toFixed(1)}° δ:${((wy/H-0.5)*180).toFixed(1)}°`;
+  }
+}
+
+// =====================
+// PHASE DIAGRAM CANVAS
+// =====================
+
+function drawPhase() {
+  const pc = document.getElementById('phase');
+  const wrap = pc.parentElement;
+  // Fluid width, fixed height — redraws correctly on any resize
+  pc.width = wrap.clientWidth || 1200;
+  pc.height = 420;
+  const pw = pc.width, ph = pc.height;
+  const cx = pc.getContext('2d');
+
+  cx.fillStyle = '#00000a';
+  cx.fillRect(0, 0, pw, ph);
+
+  // Grid
+  cx.strokeStyle = 'rgba(0,255,255,0.05)';
+  cx.lineWidth = 1;
+  for (let i=0; i<=10; i++) {
+    cx.beginPath(); cx.moveTo(pw*0.08 + i*(pw*0.84/10), ph*0.05); cx.lineTo(pw*0.08 + i*(pw*0.84/10), ph*0.9); cx.stroke();
+    cx.beginPath(); cx.moveTo(pw*0.08, ph*0.9 - i*(ph*0.85/10)); cx.lineTo(pw*0.92, ph*0.9 - i*(ph*0.85/10)); cx.stroke();
+  }
+
+  const padL=80, padR=40, padT=30, padB=60;
+  const plotW = pw - padL - padR, plotH = ph - padT - padB;
+  const ox = padL, oy = ph - padB;
+
+  // Axes
+  cx.strokeStyle = 'rgba(0,255,255,0.25)'; cx.lineWidth = 1.5;
+  cx.beginPath(); cx.moveTo(ox, padT); cx.lineTo(ox, oy); cx.lineTo(pw-padR, oy); cx.stroke();
+
+  // Axis labels
+  cx.font = '11px Share Tech Mono'; cx.fillStyle = 'rgba(200,216,232,0.35)'; cx.letterSpacing = '0.1em';
+  cx.fillText('TEMPERATURE  T / T_crit', ox + plotW/2 - 80, oy + 40);
+  cx.save(); cx.translate(20, oy - plotH/2); cx.rotate(-Math.PI/2); cx.fillText('DENSITY  ρ / ρ_crit', -60, 0); cx.restore();
+
+  // Phase regions
+  const phases = [
+    { label:'RADIATION\nDOMINATED', x:0, y:0.7, w:0.18, h:0.3, color:'rgba(255,45,120,0.12)', tc:'rgba(255,45,120,0.6)' },
+    { label:'QUARK-GLUON\nPLASMA', x:0.18, y:0.7, w:0.22, h:0.3, color:'rgba(255,107,53,0.12)', tc:'rgba(255,107,53,0.6)' },
+    { label:'BARYONIC\nMATTER', x:0, y:0.35, w:0.4, h:0.35, color:'rgba(0,255,200,0.07)', tc:'rgba(0,255,200,0.5)' },
+    { label:'DARK MATTER\nHALO', x:0.4, y:0, w:0.6, h:1, color:'rgba(123,47,255,0.07)', tc:'rgba(123,47,255,0.4)' },
+    { label:'COSMIC\nWEB', x:0, y:0, w:0.4, h:0.35, color:'rgba(40,100,255,0.1)', tc:'rgba(80,140,255,0.5)' },
+    { label:'VACUUM\nENERGY', x:0.6, y:0.7, w:0.4, h:0.3, color:'rgba(255,245,170,0.06)', tc:'rgba(255,245,170,0.4)' },
+  ];
+
+  phases.forEach(p => {
+    cx.fillStyle = p.color;
+    cx.fillRect(ox + p.x*plotW, oy - (p.y+p.h)*plotH, p.w*plotW, p.h*plotH);
+    cx.fillStyle = p.tc;
+    cx.font = '9px Share Tech Mono';
+    const lines = p.label.split('\n');
+    lines.forEach((l, i) => {
+      cx.fillText(l, ox + p.x*plotW + 8, oy - (p.y+p.h)*plotH + 14 + i*13);
+    });
+  });
+
+  // Phase boundary curves (equation of state lines)
+  const curves = [
+    { pts: [[0,1],[0.2,0.9],[0.4,0.7],[0.6,0.35],[0.8,0.1],[1,0.05]], color:'rgba(0,255,255,0.4)', label:'w = 1/3 (radiation EOS)' },
+    { pts: [[0,0.7],[0.15,0.65],[0.35,0.5],[0.55,0.3],[0.75,0.1],[1,0.02]], color:'rgba(255,200,100,0.35)', label:'w = 0 (dust)' },
+    { pts: [[0.3,1],[0.35,0.8],[0.4,0.6],[0.45,0.35],[0.5,0.15],[0.6,0.05]], color:'rgba(255,45,120,0.5)', label:'QCD transition', dashed:true },
+  ];
+
+  curves.forEach(curve => {
+    cx.beginPath();
+    curve.pts.forEach((p, i) => {
+      const px_ = ox + p[0]*plotW, py_ = oy - p[1]*plotH;
+      i===0 ? cx.moveTo(px_, py_) : cx.lineTo(px_, py_);
+    });
+    cx.strokeStyle = curve.color; cx.lineWidth = 1.5;
+    if (curve.dashed) cx.setLineDash([6,4]); else cx.setLineDash([]);
+    cx.stroke(); cx.setLineDash([]);
+    // Label
+    const lp = curve.pts[2];
+    cx.fillStyle = curve.color; cx.font = '9px Share Tech Mono';
+    cx.fillText(curve.label, ox + lp[0]*plotW + 6, oy - lp[1]*plotH - 5);
+  });
+
+  // Scatter plot of our generated nodes
+  nodes.forEach(n => {
+    const normT = Math.min(1, n.temp / 1e7);
+    const normD = Math.min(1, n.mass / 12);
+    const px_ = ox + normT * plotW;
+    const py_ = oy - normD * plotH;
+    const col = nodeColor(n);
+    cx.beginPath(); cx.arc(px_, py_, 2.5, 0, Math.PI*2);
+    cx.fillStyle = col + '0.7)'; cx.fill();
+  });
+}
+
+// =====================
+// ANIMATION LOOP
+// =====================
+
+let animId;
+function loop() {
+  if (!isPaused) {
+    t++;
+
+    // Node drift (Hubble flow + peculiar velocity)
+    // O(N·K) via spatial hash grid — cells sized just above interaction radius √30000 ≈ 173px
+    if (t % 3 === 0) {
+      const CELL_SIZE = 175;
+      const grid = new Map();
+
+      // 1. O(N) partitioning: bucket every node into its grid sector
+      nodes.forEach(n => {
+        const cx = Math.floor(n.x / CELL_SIZE);
+        const cy = Math.floor(n.y / CELL_SIZE);
+        const key = `${cx},${cy}`;
+        if (!grid.has(key)) grid.set(key, []);
+        grid.get(key).push(n);
+        n.cx = cx;
+        n.cy = cy;
+      });
+
+      // 2. O(N·K) gravity: only query the 9-cell neighbourhood
+      nodes.forEach(n => {
+        // Hubble expansion + thermal random walk
+        n.x += n.vx + (n.x - W/2) * 0.00003;
+        n.y += n.vy + (n.y - H/2) * 0.00003;
+
+        for (let ox = -1; ox <= 1; ox++) {
+          for (let oy = -1; oy <= 1; oy++) {
+            const neighbors = grid.get(`${n.cx + ox},${n.cy + oy}`);
+            if (!neighbors) continue;
+            neighbors.forEach(m => {
+              if (n === m) return;
+              const dx = m.x - n.x, dy = m.y - n.y;
+              const d2 = dx*dx + dy*dy + 500;
+              if (d2 < 30000) {
+                const F = m.mass * n.mass * 0.0004 / d2;
+                n.vx += F * dx;
+                n.vy += F * dy;
+              }
+            });
+          }
+        }
+
+        // Damping
+        n.vx *= 0.985; n.vy *= 0.985;
+        // Boundary wrap
+        if (n.x < -50) n.x = W+50;
+        if (n.x > W+50) n.x = -50;
+        if (n.y < -50) n.y = H+50;
+        if (n.y > H+50) n.y = -50;
+      });
+
+      // ---- DARK MATTER physics: same spatial grid, gravitationally attracted to baryonic nodes ----
+      // DM particles are cheap (no filament rebuild, no probe), so we run them every tick
+      darkMatter.forEach(dm => {
+        dm.cx = Math.floor(dm.x / CELL_SIZE);
+        dm.cy = Math.floor(dm.y / CELL_SIZE);
+
+        // Attract to baryonic mass in neighbourhood only
+        for (let ox = -1; ox <= 1; ox++) {
+          for (let oy = -1; oy <= 1; oy++) {
+            const neighbors = grid.get(`${dm.cx + ox},${dm.cy + oy}`);
+            if (!neighbors) continue;
+            neighbors.forEach(m => {
+              const dx = m.x - dm.x, dy = m.y - dm.y;
+              const d2 = dx*dx + dy*dy + 300;
+              if (d2 < 40000) {
+                const F = m.mass * dm.mass * 0.0006 / d2;
+                dm.vx += F * dx;
+                dm.vy += F * dy;
+              }
+            });
+          }
+        }
+
+        dm.x += dm.vx; dm.y += dm.vy;
+        dm.vx *= 0.97; dm.vy *= 0.97;
+        if (dm.x < -50) dm.x = W+50;
+        if (dm.x > W+50) dm.x = -50;
+        if (dm.y < -50) dm.y = H+50;
+        if (dm.y > H+50) dm.y = -50;
+      });
+    }
+
+    draw();
+
+    // Update entropy ticker
+    const S = (1e88 + Math.sin(t * 0.01) * 1e86).toExponential(2).replace('e+', '×10^');
+    document.getElementById('tickVal').textContent = '▮'.repeat((t % 8) + 1);
+  }
+  animId = requestAnimationFrame(loop);
+}
+
+// =====================
+// INTERACTIONS
+// =====================
+
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  mouseY = e.clientY - rect.top;
+  document.getElementById('nodeVal').textContent = nodes.length + ' baryonic + ' + darkMatter.length + ' DM';
+});
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.12 : 0.89;
+  zoom = Math.max(0.3, Math.min(8, zoom * factor));
+  document.getElementById('scaleVal').textContent = `1 px = ${(12.4/zoom).toFixed(1)} Mpc`;
+}, { passive: false });
+
+let dragging = false, dragStart = {x:0,y:0};
+canvas.addEventListener('mousedown', e => { dragging = true; dragStart = {x: e.clientX - panX, y: e.clientY - panY}; });
+canvas.addEventListener('mousemove', e => { if (dragging) { panX = e.clientX - dragStart.x; panY = e.clientY - dragStart.y; }});
+canvas.addEventListener('mouseup', () => { dragging = false; });
+
+document.getElementById('btnZoomIn').addEventListener('click', () => { zoom = Math.min(8, zoom*1.3); });
+document.getElementById('btnZoomOut').addEventListener('click', () => { zoom = Math.max(0.3, zoom*0.77); });
+document.getElementById('btnReset').addEventListener('click', () => { zoom=1; panX=0; panY=0; generateCosmos(); });
+document.getElementById('btnPause').addEventListener('click', function() {
+  isPaused = !isPaused;
+  this.textContent = isPaused ? '▶' : '⏸';
+});
+
+// =====================
+// INIT
+// =====================
+
+generateCosmos();
+loop();
+// Draw phase diagram after nodes exist
+setTimeout(drawPhase, 200);
+</script>
+</body>
+</html>
